@@ -1,0 +1,407 @@
+global:
+  namespaceOverride: ""
+
+labels: {}
+
+loki:
+  enabled: true
+  gateway:
+    enabled: false
+  loki:
+    auth_enabled: false
+    commonConfig:
+      replication_factor: 1
+    storage:
+      type: 'filesystem'
+    structuredConfig:
+      ruler:
+        alertmanager_url: http://{{ .Release.Name }}-prometheus-alertmanager:9093
+        enable_alertmanager_v2: true
+        enable_api: true
+        ring:
+          kvstore:
+            store: inmemory
+        rule_path: /tmp/scratch
+        storage:
+          type: local
+          local:
+            directory: /rules
+      table_manager:
+        retention_deletes_enabled: true
+        retention_period: 2184h
+  monitoring:
+    lokiCanary:
+      enabled: false
+    selfMonitoring:
+      enabled: false
+      grafanaAgent:
+        installOperator: false
+  persistence:
+    enableStatefulSetAutoDeletePVC: true
+    size: 100Gi
+  rules:
+    - name: hedera-mirror-grpc
+      rules:
+        - alert: GrpcLogErrors
+          annotations:
+            description: "Logs for {{ $labels.namespace }}/{{ $labels.pod }} have reached {{ $value }} error messages/s in a 3m period"
+            summary: High rate of errors in logs
+          expr: >
+            sum(rate({component="grpc"}
+              | regexp `(?P<timestamp>\S+) (?P<level>\S+) (?P<thread>\S+) (?P<class>\S+) (?P<message>.+)`
+              | level = "ERROR"
+              != "reactor.core.publisher"
+              != "drainError"
+              != "org.springframework"
+              != "connection validation failed"
+              != "Stream closed before write could take place"
+              != "Connection unexpectedly closed"
+              != "Unknown error subscribing to topic"
+              != "Error has been observed at the following"
+              != "ReactorNettyClient$PostgresConnectionClosedException: Connection closed"
+              != "i.g.n.s.i.g.n.NettyServerHandler Stream Error"
+              != "Http2Exception.streamError"
+              != "readAddress(..) failed: Connection reset by peer"
+              != "i.r.p.c.ReactorNettyClient Connection Error"
+              != "i.n.u.ResourceLeakDetector LEAK: ByteBuf.release()"
+              != "Not a valid topic"
+              != "Must be greater than or equal to 0"
+              != "Topic does not exist"
+            [1m])) by (namespace, pod) > 1
+          for: 3m
+          labels:
+            severity: critical
+    - name: hedera-mirror-importer
+      rules:
+        - alert: ImporterLogErrors
+          annotations:
+            description: "Logs for {{ $labels.namespace }}/{{ $labels.pod }} have reached {{ $value }} error messages/s in a 5m period"
+            summary: High rate of errors in logs
+          expr: >
+            sum(rate({component="importer"}
+              | regexp `(?P<timestamp>\S+) (?P<level>\S+) (?P<thread>\S+) (?P<class>\S+) (?P<message>.+)`
+              | level = "ERROR"
+              != "UnusedChannelExceptionHandler"
+              | message =~ ".*(Exception|hash mismatch for file|Unknown record file delimiter|Unknown file delimiter|Error parsing record file|Expecting previous file hash|Unable to extract hash and signature from file|Failed to verify record files|Account balance dataset timestamp mismatch!|ERRORS processing account balances file|does not exist in the database|Unable to connect to database|Address book file).*"
+            [1m])) by (namespace, pod) > 0.5
+          for: 5m
+          labels:
+            severity: critical
+        - alert: ImporterRequiresRestart
+          annotations:
+            description: "{{ $labels.namespace }}/{{ $labels.pod }} requires a restart after logging {{ $value }} messages per second in a 1m period with the unrecoverable error '{{ $labels.message }}'"
+            summary: Importer received an error that indicates a restart is required
+          expr: >
+            sum(rate({component="importer"}
+              | regexp `(?P<timestamp>\S+) (?P<level>\S+) (?P<thread>\S+) (?P<class>\S+) (?P<message>.+)`
+              | message =~ ".*(Error starting watch service|Unable to fetch entity types|Unable to fetch transaction types|environment variable not set|Cannot load configuration from).*"
+            [1m])) by (namespace, pod, message) > 0.01
+          for: 1m
+          labels:
+            severity: critical
+    - name: hedera-mirror-rest
+      rules:
+        - alert: RestLogErrors
+          annotations:
+            description: "Logs for {{ $labels.namespace }}/{{ $labels.pod }} have reached {{ $value }} error messages/s in a 1m period"
+            summary: "High rate of log errors"
+          expr: >
+            sum(rate({component="rest"}
+              | regexp `(?P<timestamp>\S+) (?P<level>\S+) (?P<requestId>\S+) (?P<message>.+)`
+              | level = "ERROR" or level = "FATAL"
+            [1m])) by (namespace, pod) > 0.04
+          for: 1m
+          labels:
+            severity: critical
+    - name: hedera-mirror-rosetta
+      rules:
+        - alert: RosettaLogErrors
+          annotations:
+            description: "Logs for {{ $labels.namespace }}/{{ $labels.pod }} have reached {{ $value }} error messages/s in a 1m period"
+            summary: "High rate of log errors"
+          expr: >
+            sum(rate({component="rosetta"}
+              | logfmt
+              | level = "error" or level = "fatal"
+            [1m])) by (namespace, pod) > 0.04
+          for: 1m
+          labels:
+            severity: critical
+  serviceMonitor:
+    enabled: true
+  singleBinary:
+    extraVolumeMounts:
+      - mountPath: /rules
+        name: rules
+    extraVolumes:
+      - name: rules
+        configMap:
+          defaultMode: 420
+          name: mirror-log-alerts
+    replicas: 1
+    resources:
+      limits:
+        cpu: 200m
+        memory: 256Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi
+  test:
+    enabled: false
+
+networkPolicy:
+  enabled: false
+
+priorityClass:
+  enabled: true
+
+prometheus-adapter:
+  enabled: true
+  priorityClassName: low
+  prometheus:
+    url: http://{{ .Release.Name }}-prometheus-prometheus
+  resources:
+    limits:
+      cpu: 50m
+      memory: 100Mi
+    requests:
+      cpu: 25m
+      memory: 50Mi
+  rules:
+    default: false
+    custom:  # This is a custom rule which exposes (requests_per_second) from the prometheus adapter to be used by any Horizontal Pod Autoscaler.
+      - seriesQuery: 'api_all_request_total{namespace!="",pod!=""}'
+        resources:
+          overrides:
+            namespace:
+              resource: "namespace"
+            pod:
+              resource: "pod"
+        name:
+          as: "requests_per_second"
+        metricsQuery: "sum(rate(<<.Series>>{<<.LabelMatchers>>}[3m])) by (<<.GroupBy>>)"
+
+prometheus:
+  alertmanager:
+    alertmanagerSpec:
+      alertmanagerConfigSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: hedera-mirror-node
+      priorityClassName: low
+      resources:
+        limits:
+          cpu: 50m
+          memory: 80Mi
+        requests:
+          cpu: 30m
+          memory: 30Mi
+    config:
+      receivers:
+        - name: 'null'
+      route:
+        group_by:
+          - namespace
+          - alertname
+        group_wait: 30s
+        receiver: 'null'
+        repeat_interval: 7d
+        routes: []
+      templates:
+        - '/etc/alertmanager/config/slack.tmpl'
+    enabled: true
+    templateFiles:
+      slack.tmpl: |-
+        {{- define "slack.title" -}}
+        {{- .Status | title }} {{ .CommonLabels.alertname }}{{ if .CommonLabels.namespace }} in {{ .CommonLabels.namespace }}{{ end }}
+        {{- end -}}
+
+        {{- define "slack.text" -}}
+        {{ range .Alerts -}}
+        *Summary:* {{ if .Annotations.summary }}{{ .Annotations.summary }}{{ else }}{{ .Annotations.message }}{{ end }}{{"\n"}}
+        {{- if .Annotations.description }} *Description:* {{ .Annotations.description }}{{"\n"}}{{ end }}
+        *Prometheus:* *<{{ .GeneratorURL }}|:fire:>* {{- if .Annotations.dashboard_url }}     *Grafana:* *<{{ .Annotations.dashboard_url }}|:chart_with_upwards_trend:>*{{ end }}{{- if .Annotations.runbook_url }}      *Runbook:* *<{{ .Annotations.runbook_url }}|:notebook:>*{{ end }}
+
+        *Labels:*
+          {{ range .Labels.SortedPairs }} • *{{ .Name }}:* `{{ .Value }}`
+          {{ end }}
+        {{ end }}
+        {{- end -}}
+  coreDns:
+    enabled: false
+  enabled: true
+  grafana:
+    additionalDataSources:
+      - name: AlertManager
+        type: camptocamp-prometheus-alertmanager-datasource
+        access: proxy
+        url: http://{{ .Release.Name }}-prometheus-alertmanager:9093
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://{{ .Release.Name }}-loki:3100
+        jsonData:
+          maxLines: 500
+    adminPassword: ""  # Randomly generated if left blank
+    defaultDashboardsEnabled: true
+    plugins:
+      - camptocamp-prometheus-alertmanager-datasource
+    resources:
+      limits:
+        cpu: 300m
+        memory: 500Mi
+      requests:
+        cpu: 150m
+        memory: 75Mi
+  kube-state-metrics:
+    resources:
+      limits:
+        cpu: 10m
+        memory: 64Mi
+      requests:
+        cpu: 5m
+        memory: 16Mi
+  # We disable these exporters because they either don't work in GKE or produce too many time series
+  kubeApiServer:
+    enabled: false
+  kubeControllerManager:
+    enabled: false
+  kubeDns:
+    enabled: false
+  kubeEtcd:
+    enabled: false
+  kubelet:
+    # Disable these high cardinality metrics
+    serviceMonitor:
+      cAdvisorMetricRelabelings:
+        - action: drop
+          regex: container_(memory_failures_total|tasks_state)
+          sourceLabels: [__name__]
+      metricRelabelings:
+        - action: drop
+          regex: .*_bucket
+          sourceLabels: [__name__]
+  kubeProxy:
+    enabled: false
+  kubeScheduler:
+    enabled: false
+  prometheus-node-exporter:
+    hostNetwork: false
+    resources:
+      limits:
+        cpu: 100m
+        memory: 50Mi
+      requests:
+        cpu: 50m
+        memory: 20Mi
+  prometheus:
+    additionalPodMonitors:
+      - name: traefik
+        podMetricsEndpoints:
+          - port: metrics
+            path: /metrics
+            interval: 15s
+        selector:
+          matchLabels:
+            app.kubernetes.io/name: traefik
+    prometheusSpec:
+      podMonitorSelectorNilUsesHelmValues: false
+      priorityClassName: low
+      resources:
+        limits:
+          cpu: 750m
+          memory: 2Gi
+        requests:
+          cpu: 250m
+          memory: 250Mi
+      retention: 60d
+      ruleSelectorNilUsesHelmValues: false
+      scrapeInterval: 30s
+      serviceMonitorSelectorNilUsesHelmValues: false
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            resources:
+              requests:
+                storage: 100Gi
+      walCompression: true
+  prometheusOperator:
+    resources:
+      limits:
+        cpu: 100m
+        memory: 200Mi
+      requests:
+        cpu: 50m
+        memory: 50Mi
+
+promtail:
+  config:
+    clients:
+      - url: http://{{ .Release.Name }}-loki:3100/loki/api/v1/push
+    snippets:
+      pipelineStages:
+        - docker: {}
+  enabled: true
+  resources:
+    limits:
+      cpu: 125m
+      memory: 150Mi
+    requests:
+      cpu: 50m
+      memory: 50Mi
+  serviceMonitor:
+    enabled: true
+
+testkube:
+  enabled: false
+  namespace: testkube
+  test:
+    duration: 600s
+    gitBranch: ""  # Default to .Chart.AppVersion
+    schedule: ""  # Cron schedule of the test suite, default to no schedule
+    target:
+      namespace: ""
+      release: mirror
+    vus: 500
+
+traefik:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: traefik
+  deployment:
+    kind: DaemonSet
+  enabled: true
+  globalArguments:  # Expose X-Forwarded-For header for tracing
+    - --entryPoints.web.forwardedHeaders.insecure
+    - --entryPoints.websecure.forwardedHeaders.insecure
+  logs:
+    access:
+      enabled: true
+      filters:
+        statuscodes: 400-599
+  metrics:
+    prometheus:
+      addServicesLabels: true
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  ports:
+    websecure:
+      tls:
+        enabled: true
+  priorityClassName: critical
+  resources:
+    limits:
+      cpu: 850m
+      memory: 1250Mi
+    requests:
+      cpu: 250m
+      memory: 150Mi
+  service:
+    spec: {}
+    type: ClusterIP

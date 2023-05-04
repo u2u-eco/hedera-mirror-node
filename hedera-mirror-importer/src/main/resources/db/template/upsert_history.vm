@@ -1,0 +1,30 @@
+## @formatter:off
+## The inner join then left join is a workaround for citus
+with current as (
+  select e.*
+  from $finalTable e
+  join $tempTable t on $idJoin
+  where upper(t.timestamp_range) is null
+), existing as (
+  select $existingColumnsAs, t.*
+  from $tempTable t
+  left join current e on $idJoin
+), existing_history as (
+  insert into $historyTable ($insertColumns)
+  select distinct on ($conflictColumns) $existingColumns
+  from existing
+  where e_timestamp_range is not null and timestamp_range is not null
+  order by $conflictColumns, timestamp_range asc
+),
+temp_history as (
+  insert into $historyTable ($insertColumns)
+  select distinct $coalesceColumns
+  from existing
+  where timestamp_range is not null and upper(timestamp_range) is not null
+)
+insert into $finalTable ($insertColumns)
+select $coalesceColumns
+from existing
+where (e_timestamp_range is not null and timestamp_range is null) or (timestamp_range is not null and upper(timestamp_range) is null)
+on conflict ($conflictColumns)
+do update set $updateColumns

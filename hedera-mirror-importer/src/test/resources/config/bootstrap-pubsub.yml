@@ -1,0 +1,4 @@
+embedded:
+  google:
+    pubsub:
+      enabled: true

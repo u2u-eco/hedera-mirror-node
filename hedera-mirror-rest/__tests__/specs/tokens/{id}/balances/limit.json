@@ -1,0 +1,195 @@
+{
+  "description": "Token balances api calls for a range of balances with limit",
+  "setup": {
+    "config": {
+      "response": {
+        "limit": {
+          "default": 2,
+          "max": 4
+        }
+      }
+    },
+    "accounts": [
+      {
+        "num": 17
+      },
+      {
+        "num": 18
+      },
+      {
+        "num": 19
+      },
+      {
+        "num": 20
+      },
+      {
+        "num": 21
+      }
+    ],
+    "tokens": [
+      {
+        "token_id": "0.20.1",
+        "symbol": "TOKEN1",
+        "created_timestamp": "1234567890000000001",
+        "type": "FUNGIBLE_COMMON"
+      },
+      {
+        "token_id": "0.20.2",
+        "symbol": "TOKEN2",
+        "created_timestamp": "1234567890000000002",
+        "type": "FUNGIBLE_COMMON"
+      }
+    ],
+    "balances": [
+      {
+        "timestamp": 2345,
+        "id": 17,
+        "balance": 700,
+        "tokens": [
+          {
+            "token_realm": 20,
+            "token_num": 1,
+            "balance": 300
+          },
+          {
+            "token_realm": 20,
+            "token_num": 2,
+            "balance": 301
+          }
+        ]
+      },
+      {
+        "timestamp": 2345,
+        "id": 18,
+        "balance": 200,
+        "tokens": [
+          {
+            "token_realm": 20,
+            "token_num": 1,
+            "balance": 299
+          },
+          {
+            "token_realm": 20,
+            "token_num": 2,
+            "balance": 299
+          }
+        ]
+      },
+      {
+        "timestamp": 2345,
+        "id": 19,
+        "balance": 900,
+        "tokens": [
+          {
+            "token_realm": 20,
+            "token_num": 1,
+            "balance": 301
+          },
+          {
+            "token_realm": 20,
+            "token_num": 2,
+            "balance": 401
+          }
+        ]
+      },
+      {
+        "timestamp": 2345,
+        "id": 20,
+        "balance": 450,
+        "tokens": [
+          {
+            "token_realm": 20,
+            "token_num": 1,
+            "balance": 302
+          },
+          {
+            "token_realm": 20,
+            "token_num": 2,
+            "balance": 402
+          }
+        ]
+      },
+      {
+        "timestamp": 2345,
+        "id": 21,
+        "balance": 300
+      },
+      {
+        "timestamp": 2345,
+        "id": 22,
+        "balance": 150,
+        "tokens": [
+          {
+            "token_realm": 20,
+            "token_num": 1,
+            "balance": 350
+          }
+        ]
+      },
+      {
+        "timestamp": 2345,
+        "id": 23,
+        "balance": 100,
+        "tokens": [
+          {
+            "token_realm": 20,
+            "token_num": 1,
+            "balance": 450
+          }
+        ]
+      }
+    ],
+    "transactions": [],
+    "cryptotransfers": []
+  },
+  "tests": [
+    {
+      "url": "/api/v1/tokens/0.20.1/balances?account.balance=gte:300&limit=2&order=asc",
+      "responseStatus": 200,
+      "responseJson": {
+        "timestamp": "0.000002345",
+        "balances": [
+          {
+            "account": "0.0.17",
+            "balance": 300
+          },
+          {
+            "account": "0.0.19",
+            "balance": 301
+          }
+        ],
+        "links": {
+          "next": "/api/v1/tokens/0.20.1/balances?account.balance=gte:300&limit=2&order=asc&account.id=gt:0.0.19"
+        }
+      }
+    },
+    {
+      "url": "/api/v1/tokens/0.20.1/balances?account.balance=gte:300&limit=5&order=asc",
+      "responseStatus": 200,
+      "responseJson": {
+        "timestamp": "0.000002345",
+        "balances": [
+          {
+            "account": "0.0.17",
+            "balance": 300
+          },
+          {
+            "account": "0.0.19",
+            "balance": 301
+          },
+          {
+            "account": "0.0.20",
+            "balance": 302
+          },
+          {
+            "account": "0.0.22",
+            "balance": 350
+          }
+        ],
+        "links": {
+          "next": "/api/v1/tokens/0.20.1/balances?account.balance=gte:300&limit=5&order=asc&account.id=gt:0.0.22"
+        }
+      }
+    }
+  ]
+}

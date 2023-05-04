@@ -1,0 +1,4 @@
+embedded:
+  postgresql:
+    docker-image: xinatswirlds/citus:11.2.0-alpine
+    initScriptPath: db/scripts/init-v2.sql

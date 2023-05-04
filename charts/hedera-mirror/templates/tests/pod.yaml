@@ -1,0 +1,38 @@
+{{- if .Values.test.enabled -}}
+apiVersion: v1
+kind: Pod
+metadata:
+  labels: {{- include "hedera-mirror.labels" . | nindent 4 }}
+  name: {{ include "hedera-mirror.fullname" . }}-acceptance-test
+  namespace: {{ include "hedera-mirror.namespace" . }}
+  annotations:
+    helm.sh/hook: test-success
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  containers:
+    - name: acceptance-tests
+      image: "{{ .Values.test.image.repository }}:{{ .Values.test.image.tag}}"
+      imagePullPolicy: {{ .Values.test.image.pullPolicy }}
+      command:
+        - 'sh'
+        - '-c'
+          # Copying the contents of the secret to the directory the image reads from without overwriting the existing yml.
+        - |
+          {{ $branch := .Values.test.git.branch | default .Chart.AppVersion -}}
+          apk add -qu git openjdk17-jre
+          git clone --branch {{ if regexMatch "^\\d+\\.\\d+\\.\\d+.*$" $branch }}v{{end}}{{ $branch }} --depth 1 https://github.com/{{ .Values.test.git.repository }}
+          cd hedera-mirror-node
+          ./gradlew :test:acceptance --info -Dcucumber.filter.tags="{{ .Values.test.cucumberTags }}" -Dspring.config.additional-location=/etc/secrets/ -PmaxParallelism=1
+      resources: {{ toYaml .Values.test.resources | nindent 8 }}
+      volumeMounts:
+        - name: acceptance-tests
+          mountPath: /etc/secrets
+          readOnly: true
+  restartPolicy: Never
+  terminationGracePeriodSeconds: 1
+  volumes:
+    - name: acceptance-tests
+      secret:
+        defaultMode: 420
+        secretName: {{ include "hedera-mirror.fullname" . }}-acceptance-test
+{{- end -}}

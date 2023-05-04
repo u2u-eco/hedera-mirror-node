@@ -1,0 +1,21 @@
+{
+  "description": "Invalid consensus timestamp",
+  "setup": {
+    "accounts": [],
+    "balances": [],
+    "transactions": [],
+    "cryptotransfers": [],
+    "topicmessages": []
+  },
+  "url": "/api/v1/topics/messages/123.123456789",
+  "responseStatus": 404,
+  "responseJson": {
+    "_status": {
+      "messages": [
+        {
+          "message": "Not found"
+        }
+      ]
+    }
+  }
+}

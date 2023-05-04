@@ -1,0 +1,37 @@
+name: Cleanup
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # Daily at midnight
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: [ graphql, grpc, importer, monitor, rest, rest-monitor, rosetta, web3 ]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: '${{ secrets.GCR_KEY }}'
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker gcr.io,marketplace.gcr.io
+
+      - name: Delete old untagged images
+        run: |
+          set -ex
+          DELETE_BEFORE=$(date -d "-7 days" '+%FT%T')
+          IMAGE_PATH=gcr.io/mirrornode/hedera-mirror-${{ matrix.module }}
+          DIGESTS=$(gcloud container images list-tags "${IMAGE_PATH}" --limit=1000 --sort-by=TIMESTAMP \
+            --filter="tags:main-* AND timestamp.datetime < '${DELETE_BEFORE}'" --format="get(digest)")
+
+          for digest in ${DIGESTS[*]}; do
+            gcloud container images delete --force-delete-tags -q "${IMAGE_PATH}@${digest}"
+          done

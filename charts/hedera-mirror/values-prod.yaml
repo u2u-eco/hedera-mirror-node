@@ -1,0 +1,127 @@
+# These values are production values used in combination with the hedera-mirror-common chart
+alertmanager:
+  inhibitRules:
+    enabled: true
+
+citus:
+  readReplicas:
+    replicaCount: 3
+
+global:
+  middleware: true
+
+graphql:
+  alertmanager:
+    inhibitRules:
+      enabled: true
+  hpa:
+    enabled: true
+    minReplicas: 2
+  podDisruptionBudget:
+    enabled: true
+  priorityClassName: medium
+  prometheusRules:
+    enabled: true
+  serviceMonitor:
+    enabled: true
+
+grpc:
+  alertmanager:
+    inhibitRules:
+      enabled: true
+  hpa:
+    enabled: true
+    minReplicas: 2
+  podDisruptionBudget:
+    enabled: true
+  priorityClassName: medium
+  prometheusRules:
+    enabled: true
+  serviceMonitor:
+    enabled: true
+
+importer:
+  alertmanager:
+    inhibitRules:
+      enabled: true
+  podMonitor:
+    enabled: true
+  priorityClassName: high
+  prometheusRules:
+    enabled: true
+  replicas: 1
+
+monitor:
+  alertmanager:
+    inhibitRules:
+      enabled: true
+  priorityClassName: medium
+  prometheusRules:
+    enabled: true
+  serviceMonitor:
+    enabled: true
+
+postgresql:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+  pgpool:
+    priorityClassName: critical
+    replicaCount: 2
+  postgresql:
+    priorityClassName: critical
+    upgradeRepmgrExtension: false
+    replicaCount: 2
+
+redis:
+  metrics:
+    enabled: true
+    sentinel:
+      enabled: true
+  replica:
+    priorityClassName: critical
+    replicaCount: 3
+
+rest:
+  alertmanager:
+    inhibitRules:
+      enabled: true
+  hpa:
+    minReplicas: 3
+  podDisruptionBudget:
+    enabled: true
+  priorityClassName: medium
+  prometheusRules:
+    enabled: true
+  serviceMonitor:
+    enabled: true
+
+rosetta:
+  alertmanager:
+    inhibitRules:
+      enabled: true
+  hpa:
+    minReplicas: 2
+  podDisruptionBudget:
+    enabled: true
+  priorityClassName: medium
+  prometheusRules:
+    enabled: true
+  serviceMonitor:
+    enabled: true
+
+web3:
+  alertmanager:
+    inhibitRules:
+      enabled: true
+  hpa:
+    enabled: true
+    minReplicas: 2
+  podDisruptionBudget:
+    enabled: true
+  priorityClassName: medium
+  prometheusRules:
+    enabled: true
+  serviceMonitor:
+    enabled: true
